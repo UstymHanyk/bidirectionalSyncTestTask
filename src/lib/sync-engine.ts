@@ -582,6 +582,47 @@ export class SyncEngine {
   }
 
   /**
+   * Sync contact deletion to all connected integrations
+   * This method triggers the send-contact-events flow for each connected integration
+   * to ensure the deletion is propagated to external CRM systems
+   */
+  async syncContactDeletionToIntegrations(contact: UniversalContact): Promise<void> {
+    // Auto-initialize before any sync operations
+    await this.ensureInitialized();
+    
+    console.log(`🗑️ Starting deletion sync for contact: ${contact.fullName || contact.id}`);
+    
+    try {
+      const client = await this.getClient();
+      
+      // Get all connections for this customer
+      const connections = await client.connections.find({
+        userId: this.auth.customerId
+      });
+
+      console.log(`🔗 Found ${connections.items.length} connections for deletion sync`);
+
+      // Process each active connection
+      for (const connection of connections.items) {
+        if (!connection.disconnected) {
+          try {
+            console.log(`🚀 Syncing deletion to connection: ${connection.id}`);
+            await this.processContactChangeForConnection(contact, 'deleted', connection.id);
+            console.log(`✅ Successfully synced deletion to connection: ${connection.id}`);
+          } catch (connectionError) {
+            console.error(`❌ Failed to sync deletion to connection ${connection.id}:`, connectionError);
+          }
+        }
+      }
+      
+      console.log(`✅ Completed deletion sync for contact: ${contact.fullName || contact.id}`);
+    } catch (error) {
+      console.error('Failed to sync contact deletion to integrations:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Process contact change for a specific connection
    */
   private async processContactChangeForConnection(
@@ -600,6 +641,17 @@ export class SyncEngine {
                        (contact as any)?.toObject?.() || 
                        contact;
     
+    console.log(`🔍 Processing contact ${operation} for connection ${connectionId}:`);
+    console.log(`📝 Contact data:`, JSON.stringify({
+      id: contactData.id,
+      fullName: contactData.fullName,
+      firstName: contactData.firstName,
+      lastName: contactData.lastName,
+      primaryEmail: contactData.primaryEmail,
+      primaryPhone: contactData.primaryPhone,
+      companyName: contactData.companyName
+    }, null, 2));
+    
     // Find external contact ID for this connection
     let externalContactId = null;
     
@@ -609,13 +661,16 @@ export class SyncEngine {
         connectionId,
         DataLinkDirection.EXPORT
       );
+      console.log(`🔗 Found external contact ID: ${externalContactId}`);
     } catch (dataLinkError) {
       console.log(`⚠️ Data link lookup failed for automatic sync: ${dataLinkError instanceof Error ? dataLinkError.message : 'Unknown error'}`);
       // Continue with null external ID - flow will handle as 'created'
     }
 
-    if (!externalContactId && operation !== 'created') {
-      // No existing link, skip this connection for update/delete operations
+    // **IMPORTANT**: For deletion operations, we should still proceed even without external ID
+    // The Integration.app flow can attempt to find and delete the contact by email/name
+    if (!externalContactId && operation !== 'created' && operation !== 'deleted') {
+      // Only skip for update operations if no data link exists
       console.log(`No data link found for contact ${contactData.id} on connection ${connectionId}, skipping ${operation}`);
       return;
     }
@@ -638,9 +693,9 @@ export class SyncEngine {
 
     try {
       await this.triggerFlow('send-contact-events', flowTrigger, connectionId);
-      console.log(`Triggered send-contact-events for ${crmProvider} (${connectionId}): ${operation}`);
+      console.log(`✅ Triggered send-contact-events for ${crmProvider} (${connectionId}): ${operation}`);
     } catch (error) {
-      console.error(`Failed to trigger send-contact-events flow for ${crmProvider}:`, error);
+      console.error(`❌ Failed to trigger send-contact-events flow for ${crmProvider}:`, error);
     }
   }
 
@@ -688,7 +743,16 @@ export class SyncEngine {
                            (payload.contact as any)?.toObject?.() || 
                            payload.contact || {};
         
-        // console.log('🔍 Extracted contact data:', JSON.stringify(contactData, null, 2));
+        console.log('🔍 Extracted contact data for flow:', JSON.stringify({
+          id: contactData.id,
+          fullName: contactData.fullName,
+          firstName: contactData.firstName,
+          lastName: contactData.lastName,
+          primaryEmail: contactData.primaryEmail,
+          primaryPhone: contactData.primaryPhone,
+          companyName: contactData.companyName,
+          externalId: contactData.externalId
+        }, null, 2));
         
         flowInput = {
           // **Integration.app App Event Trigger Format**
@@ -704,31 +768,28 @@ export class SyncEngine {
             firstName: contactData.firstName || '',
             lastName: contactData.lastName || '',
             
-            email: contactData.primaryEmail || '', // HubSpot uses 'email', not 'primaryEmail'
-            phone: contactData.primaryPhone || '', // HubSpot uses 'phone', not 'primaryPhone'
+            primaryEmail: contactData.primaryEmail || '',
+            primaryPhone: contactData.primaryPhone || '',
             
             // Company information
-            company: contactData.companyName || '',
-            jobtitle: contactData.jobTitle || '', // HubSpot field name
+            companyName: contactData.companyName || '',
+            jobTitle: contactData.jobTitle || '',
             
             // Full name for display
             fullName: contactData.fullName || `${contactData.firstName || ''} ${contactData.lastName || ''}`.trim(),
             
             // Lifecycle stage
-            lifecyclestage: 'lead', // Default HubSpot lifecycle stage
+            stage: contactData.stage || 'lead',
             
             // Additional fields that HubSpot accepts
             website: contactData.website || '',
-            address: contactData.primaryAddress?.full || '',
-            city: contactData.primaryAddress?.city || contactData.addresses?.[0]?.city || '',
-            state: contactData.primaryAddress?.state || contactData.addresses?.[0]?.state || '',
-            zip: contactData.primaryAddress?.zip || contactData.addresses?.[0]?.postalCode || '',
-            country: contactData.primaryAddress?.country || contactData.addresses?.[0]?.country || '',
+            primaryAddress: contactData.primaryAddress,
+            addresses: contactData.addresses,
             
-            // Meta fields - use valid HubSpot values
-            hs_latest_source: 'OTHER_CAMPAIGNS', // Valid HubSpot source option
-            created_date: contactData.createdTime || new Date().toISOString(),
-            last_modified_date: contactData.updatedTime || new Date().toISOString()
+            // Meta fields
+            source: contactData.source || 'OTHER_CAMPAIGNS',
+            createdTime: contactData.createdTime || new Date().toISOString(),
+            updatedTime: contactData.updatedTime || new Date().toISOString()
           },
           
           operation: payload.operation,

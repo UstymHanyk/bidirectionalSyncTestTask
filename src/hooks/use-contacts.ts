@@ -137,7 +137,7 @@ export function useContacts() {
       window.dispatchEvent(new CustomEvent('syncOperationStart'));
       
       const response = await fetch('/api/contacts/clear-all', {
-        method: 'POST',
+        method: 'DELETE',
         headers: getAuthHeaders(),
       });
 

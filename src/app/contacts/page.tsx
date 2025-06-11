@@ -379,7 +379,7 @@ export default function ContactsPage() {
                               <AlertTriangle className="h-5 w-5 text-red-500" />
                               <span>Clear All Contacts</span>
                             </AlertDialogTitle>
-                            <AlertDialogDescription>
+                            <div className="text-sm text-muted-foreground">
                               <div className="space-y-2">
                                 <div>
                                   This action will permanently delete <strong>all {contacts.length} contacts</strong> from your local database and send deletion events to all connected CRM systems.
@@ -391,7 +391,7 @@ export default function ContactsPage() {
                                   Integration.app will process deletion events for all connected CRMs (HubSpot, Pipedrive, etc.)
                                 </div>
                               </div>
-                            </AlertDialogDescription>
+                            </div>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
