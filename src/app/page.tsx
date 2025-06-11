@@ -18,7 +18,8 @@ import {
   AlertCircle,
   TrendingUp,
   Database,
-  AlertTriangle
+  AlertTriangle,
+  Building2
 } from "lucide-react"
 import { useDashboard } from "@/hooks/use-dashboard"
 
@@ -128,7 +129,7 @@ export default function HomePage() {
                     ) : (
                       <p className="text-xs text-muted-foreground flex items-center mt-1">
                         <CheckCircle className="inline h-3 w-3 mr-1" />
-                        {stats.successRate}% success rate
+                        Automatic sync enabled
                       </p>
                     )}
                   </div>
@@ -144,7 +145,7 @@ export default function HomePage() {
               <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-muted-foreground">Active Connections</p>
+                    <p className="text-sm font-medium text-muted-foreground">Connected CRMs</p>
                     {isLoading ? (
                       <Skeleton className="h-8 w-16" />
                     ) : (
@@ -154,13 +155,13 @@ export default function HomePage() {
                       <Skeleton className="h-4 w-20" />
                     ) : (
                       <p className="text-xs text-muted-foreground flex items-center mt-1">
-                        <Activity className="inline h-3 w-3 mr-1" />
-                        {stats.activeConnections > 0 ? 'All systems healthy' : 'Connect CRM systems'}
+                        <Building2 className="inline h-3 w-3 mr-1" />
+                        {stats.activeConnections > 0 ? 'Integrations active' : 'Connect CRM systems'}
                       </p>
                     )}
                   </div>
                   <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                    <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
+                    <Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
                   </div>
                 </div>
               </CardContent>
@@ -290,11 +291,14 @@ export default function HomePage() {
                       )}
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Success rate</span>
+                      <span className="text-muted-foreground">Integration status</span>
                       {isLoading ? (
-                        <Skeleton className="h-4 w-12" />
+                        <Skeleton className="h-5 w-20" />
                       ) : (
-                        <span className="font-medium">{stats.successRate}%</span>
+                        <Badge variant="outline" className="text-green-600 border-green-600">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Active
+                        </Badge>
                       )}
                     </div>
                     <div className="flex items-center justify-between text-sm">
@@ -315,68 +319,83 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Recent Activity - Better spacing */}
+        {/* Quick Actions - Better spacing */}
         <section className="mb-8 lg:mb-12">
           <Card className="border-0 ring-1 ring-gray-200">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-xl">Recent Activity</CardTitle>
+                  <CardTitle className="text-xl">Quick Actions</CardTitle>
                   <CardDescription className="mt-1">
-                    Latest synchronization events and system updates
+                    Manage your contacts and integrations
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/contacts?tab=sync">
-                    View All
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="space-y-3">
-                {isLoading ? (
-                  // Loading skeletons
-                  Array.from({ length: 4 }).map((_, index) => (
-                    <div key={index} className="flex items-center space-x-3 p-3 rounded-lg border bg-muted/20">
-                      <Skeleton className="h-8 w-8 rounded-full" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/4" />
-                      </div>
-                    </div>
-                  ))
-                ) : isError ? (
-                  <div className="flex items-center space-x-3 p-3 rounded-lg border bg-red-50 text-red-700">
-                    <AlertCircle className="h-8 w-8" />
-                    <div>
-                      <p className="text-sm font-medium">Unable to load recent activity</p>
-                      <p className="text-xs text-red-600">Please try refreshing the page</p>
-                    </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Button variant="outline" className="h-16 flex-col" asChild>
+                  <Link href="/contacts">
+                    <Database className="h-5 w-5 mb-2" />
+                    View Contacts
+                  </Link>
+                </Button>
+                <Button variant="outline" className="h-16 flex-col" asChild>
+                  <Link href="/contacts?tab=sync">
+                    <Activity className="h-5 w-5 mb-2" />
+                    Sync Dashboard
+                  </Link>
+                </Button>
+                <Button variant="outline" className="h-16 flex-col" asChild>
+                  <Link href="/integrations">
+                    <Settings className="h-5 w-5 mb-2" />
+                    Integrations
+                  </Link>
+                </Button>
+                <Button variant="outline" className="h-16 flex-col" asChild>
+                  <Link href="/contacts" onClick={() => {
+                    // Open create contact modal
+                    const event = new CustomEvent('openCreateContact');
+                    window.dispatchEvent(event);
+                  }}>
+                    <Users className="h-5 w-5 mb-2" />
+                    Add Contact
+                  </Link>
+                </Button>
+              </div>
+              
+              {/* Recent Activity Summary */}
+              {!isLoading && !isError && recentActivity.length > 0 && (
+                <div className="mt-6 pt-6 border-t">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-muted-foreground">Recent Activity</h4>
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href="/contacts?tab=sync" className="text-xs">
+                        View All <ArrowRight className="ml-1 h-3 w-3" />
+                      </Link>
+                    </Button>
                   </div>
-                ) : (
-                  recentActivity.map((item) => {
-                    const Icon = getStatusIcon(item.status)
-                    return (
-                      <div key={item.id} className="flex items-center space-x-3 p-3 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors">
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0 ${
-                          item.status === 'success' ? 'bg-green-100 text-green-600' :
-                          item.status === 'warning' ? 'bg-yellow-100 text-yellow-600' :
-                          item.status === 'error' ? 'bg-red-100 text-red-600' :
-                          'bg-blue-100 text-blue-600'
-                        }`}>
-                          <Icon className="h-4 w-4" />
+                  <div className="space-y-2">
+                    {recentActivity.slice(0, 2).map((item) => {
+                      const Icon = getStatusIcon(item.status)
+                      return (
+                        <div key={item.id} className="flex items-center space-x-3 text-sm">
+                          <div className={`flex h-6 w-6 items-center justify-center rounded-full flex-shrink-0 ${
+                            item.status === 'success' ? 'bg-green-100 text-green-600' :
+                            item.status === 'warning' ? 'bg-yellow-100 text-yellow-600' :
+                            item.status === 'error' ? 'bg-red-100 text-red-600' :
+                            'bg-blue-100 text-blue-600'
+                          }`}>
+                            <Icon className="h-3 w-3" />
+                          </div>
+                          <span className="flex-1 truncate">{item.action}</span>
+                          <span className="text-xs text-muted-foreground">{item.timeAgo}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{item.action}</p>
-                          <p className="text-xs text-muted-foreground">{item.timeAgo}</p>
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>

@@ -4,6 +4,7 @@ import { Contact } from '@/models/contact'
 import { SyncOperationModel } from '@/models/sync-operation'
 import { SyncEngine } from '@/lib/sync-engine'
 import { getAuthFromRequest } from '@/lib/server-auth'
+import { getIntegrationClient } from '@/lib/integration-app-client'
 import { UniversalContact } from '@/types/contact'
 
 export async function GET(request: NextRequest) {
@@ -48,14 +49,19 @@ export async function GET(request: NextRequest) {
       ? Math.floor((new Date().getTime() - new Date(syncStatus.lastSync).getTime()) / (1000 * 60))
       : null
 
-    // We no longer get connectionStatuses from this endpoint in the new model.
-    // This could be a separate call or part of a different status object if needed.
-    const activeConnections = 0; // Placeholder
-
-    // Calculate success rate from recent operations
-    const recentSuccessfulOps = syncStatus.recentActivity?.filter(op => op.status === 'success').length || 0
-    const recentTotalOps = syncStatus.recentActivity?.length || 0
-    const successRate = recentTotalOps > 0 ? Math.round((recentSuccessfulOps / recentTotalOps) * 100) : 100
+    // Get real active connections count from Integration.app
+    let activeConnections = 0;
+    try {
+      const integrationClient = await getIntegrationClient(auth);
+      const connections = await integrationClient.connections.find({
+        userId: auth.customerId
+      });
+      // Count only active (non-disconnected) connections
+      activeConnections = connections.items.filter(conn => !conn.disconnected).length;
+    } catch (error) {
+      console.error('Failed to fetch connections for dashboard:', error);
+      // Keep activeConnections as 0 if we can't fetch them
+    }
 
     // Check if data is up to date (synced within last hour)
     const isUpToDate = lastSyncMinutesAgo !== null && lastSyncMinutesAgo < 60
@@ -132,7 +138,6 @@ export async function GET(request: NextRequest) {
         activeConnections,
         lastSyncMinutesAgo,
         addedThisWeek,
-        successRate,
         isUpToDate,
       },
       recentActivity: recentActivity.slice(0, 4)

@@ -3,7 +3,7 @@ import type { UniversalContact, ContactEmail, ContactPhone, ContactAddress } fro
 import type { SyncStatus } from '@/types/sync';
 
 const contactEmailSchema = new mongoose.Schema<ContactEmail>({
-  value: { type: String, required: true },
+  value: { type: String },
   type: { type: String }
 }, { _id: false });
 
@@ -43,22 +43,18 @@ const contactSchema = new mongoose.Schema<IContact>(
     },
     fullName: {
       type: String,
-      required: true,
       trim: true,
     },
     firstName: {
       type: String,
-      required: true,
       trim: true,
     },
     lastName: {
       type: String,
-      required: true,
       trim: true,
     },
     primaryEmail: {
       type: String,
-      required: true,
       trim: true,
       index: true,
     },

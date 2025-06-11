@@ -842,6 +842,163 @@ export class SyncEngine {
   }
 
   /**
+   * Clear all contacts from local database and trigger deletion events to all integrations
+   */
+  async clearAllContacts(): Promise<{
+    deletedCount: number;
+    eventResults: {
+      total: number;
+      successful: number;
+      failed: number;
+      errors: Array<{ contactId: string; error: string }>;
+    };
+    operationId: string;
+  }> {
+    // Auto-initialize before any sync operations
+    await this.ensureInitialized();
+    
+    const operationId = uuidv4();
+
+    try {
+      await connectDB();
+
+      // Get all contacts for this customer before deletion
+      const contacts = await Contact.find({ customerId: this.auth.customerId });
+      const contactCount = contacts.length;
+
+      console.log(`🗑️ Starting clear all operation for ${contactCount} contacts...`);
+
+      // Create sync operation record
+      await SyncOperationModel.create({
+        id: operationId,
+        operationType: 'export', // This is an export operation (sending deletions to CRMs)
+        crmProvider: 'hubspot', // Use hubspot as default for bulk operations (affects all providers)
+        status: 'syncing',
+        direction: 'export',
+        triggeredBy: 'manual',
+        customerId: this.auth.customerId,
+        summary: {
+          totalContacts: contactCount,
+          newContacts: 0,
+          updatedContacts: 0,
+          deletedContacts: 0, // Will be updated as we process
+          erroredContacts: 0,
+          conflictedContacts: 0,
+          skippedContacts: 0,
+        }
+      });
+
+      if (contactCount === 0) {
+        await SyncOperationModel.findOneAndUpdate(
+          { id: operationId },
+          { status: 'completed' }
+        );
+
+        return {
+          deletedCount: 0,
+          eventResults: { total: 0, successful: 0, failed: 0, errors: [] },
+          operationId
+        };
+      }
+
+      // Send deletion events to all integrations before deleting from local DB
+      const contactEventService = new ContactEventService(this.auth);
+      const eventResults = await contactEventService.sendBulkContactDeletedEvents(
+        contacts.map(c => c.toObject())
+      );
+
+      // Also trigger deletion flows for each connected integration
+      try {
+        const client = await this.getClient();
+        const connections = await client.connections.find({
+          userId: this.auth.customerId
+        });
+
+        console.log(`🔗 Found ${connections.items.length} connections for bulk deletion flows`);
+
+        // Trigger bulk deletion flows for each active connection
+        for (const connection of connections.items) {
+          if (!connection.disconnected) {
+            try {
+              console.log(`🚀 Triggering bulk deletion flow for connection: ${connection.id}`);
+              
+              // Trigger a bulk deletion flow
+              const flowTrigger: FlowTriggerPayload = {
+                event: 'contacts.bulk_deleted',
+                customerId: this.auth.customerId,
+                crmProvider: this.getCRMProviderFromConnectionId(connection.id),
+                operation: 'deleted',
+                source: 'local'
+              };
+
+              await this.triggerFlow('send-contact-events', flowTrigger, connection.id);
+              console.log(`✅ Triggered bulk deletion flow for connection: ${connection.id}`);
+              
+            } catch (flowError) {
+              console.error(`❌ Failed to trigger deletion flow for connection ${connection.id}:`, flowError);
+            }
+          }
+        }
+      } catch (connectionsError) {
+        console.error('⚠️ Failed to get connections for bulk deletion flows:', connectionsError);
+      }
+
+      // Delete all contacts from local database
+      const deleteResult = await Contact.deleteMany({ customerId: this.auth.customerId });
+      console.log(`🗑️ Deleted ${deleteResult.deletedCount} contacts from local database`);
+
+      // If using Integration.app Data Links, clean up all links for this customer
+      if (this.dataLinkService) {
+        try {
+          // Note: Integration.app doesn't have a bulk delete API, so we'd need to clean up links individually
+          // For now, we'll log this and let the links be cleaned up naturally over time
+          console.log('🔗 Note: Data links will be cleaned up on next sync operations');
+        } catch (linkError) {
+          console.error('⚠️ Failed to clean up data links:', linkError);
+        }
+      }
+
+      // Update operation status
+      await SyncOperationModel.findOneAndUpdate(
+        { id: operationId },
+        { 
+          status: 'completed',
+          summary: {
+            totalContacts: contactCount,
+            newContacts: 0,
+            updatedContacts: 0,
+            deletedContacts: deleteResult.deletedCount,
+            erroredContacts: eventResults.failed,
+            conflictedContacts: 0,
+            skippedContacts: 0,
+          }
+        }
+      );
+
+      console.log(`✅ Clear all operation completed successfully`);
+
+      return {
+        deletedCount: deleteResult.deletedCount,
+        eventResults,
+        operationId
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to clear all contacts:', error);
+      
+      await SyncOperationModel.findOneAndUpdate(
+        { id: operationId },
+        { 
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      );
+
+      throw error;
+    }
+  }
+
+  /**
    * Get sync status including flow execution status
    */
   async getSyncStatus(): Promise<{

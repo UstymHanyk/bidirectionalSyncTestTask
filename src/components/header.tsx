@@ -28,10 +28,14 @@ import {
   RefreshCw,
   Activity,
   Sparkles,
-  X
+  X,
+  Loader2,
+  CheckCircle,
+  AlertTriangle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AuthCustomer, getStoredAuth } from "@/lib/auth"
+import { useSync } from "@/hooks/use-sync"
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -44,10 +48,73 @@ export function Header() {
   const [auth, setAuth] = useState<AuthCustomer | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
+  // Get sync status for dynamic status indicator
+  const { syncStatus, isLoading: isSyncLoading } = useSync(auth?.customerId || '')
+
   useEffect(() => {
     const authData = getStoredAuth()
     setAuth(authData)
   }, [])
+
+  const getSyncStatusInfo = () => {
+    if (isSyncLoading || !syncStatus) {
+      return {
+        icon: Loader2,
+        text: 'Loading...',
+        color: 'text-gray-600',
+        bgColor: 'from-gray-50 to-gray-50 dark:from-gray-950/30 dark:to-gray-950/30',
+        borderColor: 'border-gray-200/50 dark:border-gray-800/30',
+        animate: 'animate-spin'
+      }
+    }
+
+    const isActivelyRunning = (syncStatus.pendingOperations || 0) > 0 || syncStatus.status === 'syncing'
+
+    if (isActivelyRunning) {
+      return {
+        icon: RefreshCw,
+        text: 'Syncing',
+        color: 'text-blue-600 dark:text-blue-400',
+        bgColor: 'from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30',
+        borderColor: 'border-blue-200/50 dark:border-blue-800/30',
+        animate: 'animate-spin'
+      }
+    }
+
+    switch (syncStatus.status) {
+      case 'failed':
+      case 'error':
+        return {
+          icon: AlertTriangle,
+          text: 'Failed',
+          color: 'text-red-600 dark:text-red-400',
+          bgColor: 'from-red-50 to-red-50 dark:from-red-950/30 dark:to-red-950/30',
+          borderColor: 'border-red-200/50 dark:border-red-800/30',
+          animate: ''
+        }
+      case 'success':
+        return {
+          icon: CheckCircle,
+          text: 'Synced',
+          color: 'text-green-600 dark:text-green-400',
+          bgColor: 'from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30',
+          borderColor: 'border-green-200/50 dark:border-green-800/30',
+          animate: (syncStatus.pendingOperations || 0) > 0 ? 'animate-pulse' : ''
+        }
+      default:
+        return {
+          icon: CheckCircle,
+          text: 'Ready',
+          color: 'text-green-600 dark:text-green-400',
+          bgColor: 'from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30',
+          borderColor: 'border-green-200/50 dark:border-green-800/30',
+          animate: ''
+        }
+    }
+  }
+
+  const statusInfo = getSyncStatusInfo()
+  const StatusIcon = statusInfo.icon
 
   const getInitials = (name: string) => {
     return name
@@ -140,13 +207,31 @@ export function Header() {
 
           {/* Right side actions */}
           <div className="flex items-center space-x-3">
-            {/* Sync Status Indicator */}
-            <div className="hidden sm:flex items-center space-x-2 px-3 py-2 rounded-full bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200/50 dark:border-green-800/30">
-              <Activity className="h-3 w-3 text-green-600 animate-pulse" />
-              <span className="text-xs font-semibold text-green-700 dark:text-green-400">
-                Synced
-              </span>
-            </div>
+            {/* Dynamic Sync Status Indicator */}
+            {auth?.customerId && (
+              <div className={cn(
+                "hidden sm:flex items-center space-x-2 px-3 py-2 rounded-full bg-gradient-to-r border transition-all duration-300",
+                statusInfo.bgColor,
+                statusInfo.borderColor
+              )}>
+                <StatusIcon className={cn(
+                  "h-3 w-3",
+                  statusInfo.color,
+                  statusInfo.animate
+                )} />
+                <span className={cn(
+                  "text-xs font-semibold",
+                  statusInfo.color
+                )}>
+                  {statusInfo.text}
+                </span>
+                                 {syncStatus && (syncStatus.pendingOperations || 0) > 0 && (
+                   <Badge variant="secondary" className="text-xs ml-1 bg-white/80">
+                     {syncStatus.pendingOperations}
+                   </Badge>
+                 )}
+              </div>
+            )}
 
             {/* User Menu */}
             <DropdownMenu>
@@ -289,9 +374,20 @@ export function Header() {
 
                   {/* Footer */}
                   <div className="p-6 border-t border-border/50">
-                    <div className="flex items-center justify-center space-x-2 text-xs text-muted-foreground">
-                      <Activity className="h-3 w-3 text-green-500 animate-pulse" />
-                      <span>All systems operational</span>
+                    <div className="flex items-center justify-center space-x-2 text-xs">
+                      {auth?.customerId && (
+                        <>
+                          <StatusIcon className={cn(
+                            "h-3 w-3",
+                            statusInfo.color,
+                            statusInfo.animate
+                          )} />
+                          <span className={statusInfo.color}>
+                            {statusInfo.text}
+                            {syncStatus && (syncStatus.pendingOperations || 0) > 0 && ` (${syncStatus.pendingOperations})`}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

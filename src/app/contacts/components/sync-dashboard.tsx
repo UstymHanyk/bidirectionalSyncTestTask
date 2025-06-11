@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useSync } from '@/hooks/use-sync';
 import { getAuthHeaders } from '@/lib/fetch-utils';
-import { Loader2, Upload, Zap, Activity, Info, Download, Building2, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { Loader2, Upload, Zap, Activity, Download, Building2, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import type { CRMProvider, SyncStatus } from '@/types/sync';
 
 interface SyncDashboardProps {
@@ -82,6 +82,8 @@ export function SyncDashboard({ customerId }: SyncDashboardProps) {
     
     try {
       console.log(`Syncing local changes to ${provider}`);
+      window.dispatchEvent(new CustomEvent('syncOperationStart'));
+      
       const realConnectionId = connectionId || getConnectionId(provider);
       
       if (!realConnectionId) {
@@ -91,11 +93,13 @@ export function SyncDashboard({ customerId }: SyncDashboardProps) {
       if(triggerFlow) {
         // Only trigger export since imports are handled by webhooks automatically
         await triggerFlow(provider, realConnectionId, 'export');
+        window.dispatchEvent(new CustomEvent('syncOperationComplete'));
       }
     } catch (error) {
       console.error(`Failed to sync to ${provider}:`, error);
     } finally {
       setTriggeringProvider(null);
+      window.dispatchEvent(new CustomEvent('syncOperationEnd'));
     }
   };
 
@@ -107,6 +111,8 @@ export function SyncDashboard({ customerId }: SyncDashboardProps) {
     
     try {
       console.log(`Importing all contacts from ${provider}`);
+      window.dispatchEvent(new CustomEvent('syncOperationStart'));
+      
       const realConnectionId = connectionId || getConnectionId(provider);
       
       if (!realConnectionId) {
@@ -133,11 +139,13 @@ export function SyncDashboard({ customerId }: SyncDashboardProps) {
 
       const result = await response.json();
       console.log(`Import result:`, result);
+      window.dispatchEvent(new CustomEvent('syncOperationComplete'));
       
     } catch (error) {
       console.error(`Failed to import from ${provider}:`, error);
     } finally {
       setTriggeringProvider(null);
+      window.dispatchEvent(new CustomEvent('syncOperationEnd'));
     }
   };
 
@@ -247,24 +255,6 @@ export function SyncDashboard({ customerId }: SyncDashboardProps) {
 
           <div className="text-sm text-muted-foreground">
             <strong>Last Sync:</strong> {formatTimestamp(syncStatus?.lastSync)}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* How It Works Info */}
-      <Card className="border-blue-200 bg-blue-50/50">
-        <CardContent className="pt-6">
-          <div className="flex items-start gap-3">
-            <Info className="h-5 w-5 text-blue-600 mt-0.5" />
-            <div className="space-y-2 text-sm">
-              <p className="font-medium text-blue-800">How Sync Works:</p>
-              <ul className="text-blue-700 space-y-1">
-                <li>• <strong>Automatic Import:</strong> Changes from CRMs are synced automatically via webhooks</li>
-                <li>• <strong>Manual Import:</strong> Use "Import" buttons to pull all existing contacts from a CRM (useful when first connecting)</li>
-                <li>• <strong>Manual Export:</strong> Use "Export" buttons to push your local changes to CRMs</li>
-                <li>• <strong>Real-time:</strong> All directions work in real-time through Integration.app</li>
-              </ul>
-            </div>
           </div>
         </CardContent>
       </Card>

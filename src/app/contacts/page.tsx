@@ -11,28 +11,55 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { 
   UserPlus, 
-  Upload, 
   AlertCircle, 
   Activity,
   TrendingUp,
   Database,
   Filter,
-  Search
+  Search,
+  Trash2,
+  AlertTriangle,
+  Building2,
+  RefreshCw
 } from "lucide-react"
 import { toast } from "sonner"
 import { SyncDashboard } from "./components/sync-dashboard"
 import { Input } from "@/components/ui/input"
 import { UniversalContact } from "@/types/contact"
 import { getStoredAuth, AuthCustomer } from "@/lib/auth"
+import { getAuthHeaders } from "@/lib/fetch-utils"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+
+interface Connection {
+  id: string;
+  name: string;
+  integrationName: string;
+  status: string;
+  isActive: boolean;
+  crmProvider: string;
+}
 
 export default function ContactsPage() {
-  const { contacts, isLoading, isError, createContact, updateContact, deleteContact } = useContacts()
+  const { contacts, isLoading, isError, createContact, updateContact, deleteContact, clearAllContacts } = useContacts()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingContact, setEditingContact] = useState<UniversalContact | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTab, setSelectedTab] = useState<"contacts" | "sync">("contacts")
   const [auth, setAuth] = useState<AuthCustomer | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [isClearingAll, setIsClearingAll] = useState(false)
+  const [connections, setConnections] = useState<Connection[]>([])
+  const [loadingConnections, setLoadingConnections] = useState(true)
 
   useEffect(() => {
     const authData = getStoredAuth()
@@ -42,6 +69,35 @@ export default function ContactsPage() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Fetch connections for integration count
+  useEffect(() => {
+    const fetchConnections = async () => {
+      try {
+        const response = await fetch('/api/sync/connections', {
+          headers: getAuthHeaders()
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setConnections(data.connections || []);
+        } else {
+          console.error('Failed to fetch connections');
+        }
+      } catch (error) {
+        console.error('Error fetching connections:', error);
+      } finally {
+        setLoadingConnections(false);
+      }
+    };
+
+    if (mounted) {
+      fetchConnections();
+    }
+  }, [mounted]);
+
+  // Calculate active connections count
+  const activeConnectionsCount = connections.filter(conn => conn.isActive).length;
 
   // Filter contacts based on search term
   const filteredContacts = useMemo(() => {
@@ -108,6 +164,32 @@ export default function ContactsPage() {
   const handleCloseModal = () => {
     setEditingContact(null)
     setShowCreateModal(false)
+  }
+
+  const handleClearAllContacts = async () => {
+    setIsClearingAll(true)
+    try {
+      const result = await clearAllContacts()
+      
+      toast.success("All contacts cleared successfully", {
+        description: `Deleted ${result.deletedCount} contacts. Integration events: ${result.eventResults.successful}/${result.eventResults.total} successful.`
+      })
+
+      console.log('Clear all operation completed:', result)
+      
+      if (result.eventResults.failed > 0) {
+        toast.warning("Some integration events failed", {
+          description: `${result.eventResults.failed} integration events failed. Check console for details.`
+        })
+      }
+      
+    } catch (error) {
+      toast.error("Failed to clear contacts", {
+        description: error instanceof Error ? error.message : "Unknown error occurred"
+      })
+    } finally {
+      setIsClearingAll(false)
+    }
   }
 
   if (isError) {
@@ -193,25 +275,31 @@ export default function ContactsPage() {
                   <CardContent className="pt-4 sm:pt-6">
                     <div className="flex items-center space-x-3 sm:space-x-4">
                       <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-green-100 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 ring-1 ring-green-200/50 dark:ring-green-800/30 group-hover:scale-102 transition-transform duration-300">
-                        <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" />
+                        <RefreshCw className="h-5 w-5 sm:h-6 sm:w-6 text-green-600 dark:text-green-400" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Filtered Results</p>
-                        <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{filteredContacts.length}</p>
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
+                          {searchTerm ? 'Search Results' : 'Ready to Sync'}
+                        </p>
+                        <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">
+                          {searchTerm ? filteredContacts.length : contacts.length}
+                        </p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="group hover:shadow-lg transition-all duration-200 border-0 ring-1 ring-border/50 hover:ring-blue-500/20 sm:col-span-2 lg:col-span-1">
+                <Card className="group hover:shadow-lg transition-all duration-200 border-0 ring-1 ring-border/50 hover:ring-blue-500/20">
                   <CardContent className="pt-4 sm:pt-6">
                     <div className="flex items-center space-x-3 sm:space-x-4">
                       <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-100 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30 ring-1 ring-blue-200/50 dark:ring-blue-800/30 group-hover:scale-102 transition-transform duration-200">
-                        <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
+                        <Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Active</p>
-                        <p className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{contacts.length}</p>
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Connected CRMs</p>
+                        <p className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">
+                          {loadingConnections ? '...' : activeConnectionsCount}
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -263,21 +351,70 @@ export default function ContactsPage() {
                         </TooltipContent>
                       </Tooltip>
 
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-full sm:w-auto h-11 border-border/50 hover:bg-muted/60 hover:border-primary/20"
-                            onClick={() => setSelectedTab("sync")}
-                          >
-                            <Upload className="h-4 w-4 mr-2" />
-                            Push to CRMs
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Push local changes to CRM systems. Imports happen automatically via webhooks.</p>
-                        </TooltipContent>
-                      </Tooltip>
+
+
+                      {/* Clear All Button */}
+                      <AlertDialog>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full sm:w-auto h-11 border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 hover:text-red-700"
+                                disabled={contacts.length === 0 || isClearingAll}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {isClearingAll ? 'Clearing...' : 'Clear All'}
+                              </Button>
+                            </AlertDialogTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Delete all contacts from local database and send deletion events to all connected CRMs</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center space-x-2">
+                              <AlertTriangle className="h-5 w-5 text-red-500" />
+                              <span>Clear All Contacts</span>
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              <div className="space-y-2">
+                                <div>
+                                  This action will permanently delete <strong>all {contacts.length} contacts</strong> from your local database and send deletion events to all connected CRM systems.
+                                </div>
+                                <div className="text-red-600 font-medium">
+                                  ⚠️ This action cannot be undone!
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  Integration.app will process deletion events for all connected CRMs (HubSpot, Pipedrive, etc.)
+                                </div>
+                              </div>
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleClearAllContacts}
+                              disabled={isClearingAll}
+                              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                            >
+                              {isClearingAll ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                  Clearing All...
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Clear All {contacts.length} Contacts
+                                </>
+                              )}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 </CardContent>
@@ -297,25 +434,7 @@ export default function ContactsPage() {
                 </Alert>
               )}
 
-              {/* Mobile Cards View */}
-              <div className="block lg:hidden space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Contacts</h3>
-                </div>
-                <Card className="group hover:shadow-lg transition-all duration-200 border-0 ring-1 ring-border/50 hover:ring-primary/20">
-                  <CardContent className="pt-4 sm:pt-6">
-                    <div className="flex items-center space-x-3 sm:space-x-4">
-                      <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/10 group-hover:scale-102 transition-transform duration-200">
-                        <Database className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Total Contacts</p>
-                        <p className="text-xl sm:text-2xl font-bold">{contacts.length}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+
 
               {/* Contacts Table */}
               <ContactsTable 

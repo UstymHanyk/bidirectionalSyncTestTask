@@ -7,7 +7,6 @@ interface DashboardStats {
   activeConnections: number
   lastSyncMinutesAgo: number | null
   addedThisWeek: number
-  successRate: number
   isUpToDate: boolean
 }
 
@@ -42,7 +41,6 @@ export function useDashboard() {
       activeConnections: 0,
       lastSyncMinutesAgo: null,
       addedThisWeek: 0,
-      successRate: 0,
       isUpToDate: false,
     },
     recentActivity: data?.recentActivity ?? [],

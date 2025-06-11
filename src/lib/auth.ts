@@ -13,8 +13,8 @@ export function getStoredAuth(): AuthCustomer | null {
   
   // const customerId = localStorage.getItem(AUTH_ID_KEY);
   // const customerName = localStorage.getItem(CUSTOMER_NAME_KEY);
-  const customerId= "eaf2c92f-8ebe-4a30-aeb7-4d2e53c891e5";
-  const customerName= "eaf2c92f-8ebe-4a30-aeb7-4d2e53c891e5";
+  const customerId= "6835df191f777a2c62bf57d6";
+  const customerName= "Ustym Hanyk";
   if (!customerId) return null;
   
   return {
