@@ -20,7 +20,7 @@ interface FlowTriggerPayload {
   contact?: UniversalContact;
   customerId: string;
   crmProvider?: CRMProvider;
-  operation: 'create' | 'update' | 'delete';
+  operation: 'created' | 'updated' | 'deleted';
   source: 'local' | 'external';
 }
 
@@ -138,7 +138,7 @@ export class SyncEngine {
         event: 'sync.import.triggered',
         customerId: this.auth.customerId,
         crmProvider,
-        operation: 'create',
+        operation: 'created',
         source: 'external'
       };
 
@@ -279,7 +279,7 @@ export class SyncEngine {
               // Check if contact has an external ID to determine if it should be create or update
               // NOTE: Try Integration.app SDK first, fallback to legacy database for compatibility
               let externalContactId = null;
-              let operationType: 'create' | 'update' = 'create';
+              let operationType: 'created' | 'updated' = 'created';
               
               if (!this.dataLinkService) {
                 throw new Error('Data link service not initialized');
@@ -292,11 +292,11 @@ export class SyncEngine {
                   connectionId,
                   DataLinkDirection.EXPORT
                 );
-                operationType = externalContactId ? 'update' : 'create';
+                operationType = externalContactId ? 'updated' : 'created';
                 console.log(`🔗 SDK Data link lookup: Found external ID "${externalContactId}" -> operation: ${operationType}`);
               } catch (dataLinkError) {
                 console.log(`🔗 No existing data link found in SDK -> operation: create`);
-                operationType = 'create';
+                operationType = 'created';
                 externalContactId = null;
               }
               
@@ -473,7 +473,7 @@ export class SyncEngine {
   private async processIncomingContact(
     externalContact: UniversalContact, 
     crmProvider: CRMProvider, 
-    operation: 'create' | 'update' | 'delete',
+    operation: 'created' | 'updated' | 'deleted',
     connectionId: string = 'unknown' // Will be passed from flow context
   ): Promise<void> {
     
@@ -481,7 +481,7 @@ export class SyncEngine {
       throw new Error('Data link service not initialized');
     }
     
-    if (operation === 'delete') {
+    if (operation === 'deleted') {
       // Handle contact deletion using Integration.app Data Links
       const localContactId = await this.dataLinkService.findLocalContactId(
         externalContact.id,
@@ -555,7 +555,7 @@ export class SyncEngine {
    */
   private async processLocalContactChange(
     contact: UniversalContact, 
-    operation: 'create' | 'update' | 'delete'
+    operation: 'created' | 'updated' | 'deleted'
   ): Promise<void> {
     
     // For this implementation, we need to know which connections to sync to
@@ -586,7 +586,7 @@ export class SyncEngine {
    */
   private async processContactChangeForConnection(
     contact: UniversalContact,
-    operation: 'create' | 'update' | 'delete',
+    operation: 'created' | 'updated' | 'deleted',
     connectionId: string
   ): Promise<void> {
     
@@ -611,10 +611,10 @@ export class SyncEngine {
       );
     } catch (dataLinkError) {
       console.log(`⚠️ Data link lookup failed for automatic sync: ${dataLinkError instanceof Error ? dataLinkError.message : 'Unknown error'}`);
-      // Continue with null external ID - flow will handle as 'create'
+      // Continue with null external ID - flow will handle as 'created'
     }
 
-    if (!externalContactId && operation !== 'create') {
+    if (!externalContactId && operation !== 'created') {
       // No existing link, skip this connection for update/delete operations
       console.log(`No data link found for contact ${contactData.id} on connection ${connectionId}, skipping ${operation}`);
       return;
@@ -692,15 +692,13 @@ export class SyncEngine {
         
         flowInput = {
           // **Integration.app App Event Trigger Format**
-          type: payload.operation, // 'create', 'update', 'delete'
+          type: payload.operation, // 'created', 'updated', 'deleted'
           customerId: payload.customerId,
           
-          // **ESSENTIAL FIELDS**: Integration.app flows need these exact field names
           internalContactId: contactData.id, // Local contact ID (for $.input.app-event-trigger)
           externalContactId: contactData.externalId || null, // External CRM contact ID
           
-          // This matches what HubSpot expects and what Integration.app can map
-          contact: {
+          data  : {
             // Basic required fields
             id: contactData.id,
             firstName: contactData.firstName || '',
@@ -727,8 +725,8 @@ export class SyncEngine {
             zip: contactData.primaryAddress?.zip || contactData.addresses?.[0]?.postalCode || '',
             country: contactData.primaryAddress?.country || contactData.addresses?.[0]?.country || '',
             
-            // Meta fields
-            source: 'Integration.app',
+            // Meta fields - use valid HubSpot values
+            hs_latest_source: 'OTHER_CAMPAIGNS', // Valid HubSpot source option
             created_date: contactData.createdTime || new Date().toISOString(),
             last_modified_date: contactData.updatedTime || new Date().toISOString()
           },
@@ -739,7 +737,7 @@ export class SyncEngine {
         };
       } else if (flowName === 'receive-contact-events') {
         flowInput = {
-          operation: payload.operation, // 'create', 'update', 'delete'
+          operation: payload.operation, // 'created', 'updated', 'deleted'
           crmProvider: payload.crmProvider,
           customerId: payload.customerId,
           connectionId,
@@ -760,7 +758,6 @@ export class SyncEngine {
 
       console.log('🎯 Simplified flow input:', JSON.stringify(flowInput, null, 2));
 
-      // **CRITICAL FIX: Use run() with proper input for flow progression**
       // Integration.app flows expect specific input formats to proceed through nodes
       const flowRun = await flowInstance.run({
         input: flowInput,

@@ -5,7 +5,7 @@ export type ContactEventType = 'created' | 'updated' | 'deleted';
 
 export interface ContactEvent {
   type: ContactEventType;
-  contact: UniversalContact;
+  data: UniversalContact;
   customerId: string;
   timestamp: string;
 }
@@ -33,7 +33,7 @@ export class ContactEventService {
     try {
       const eventPayload: ContactEvent = {
         type,
-        contact,
+        data:contact,
         customerId: this.auth.customerId,
         timestamp: new Date().toISOString(),
         ...metadata

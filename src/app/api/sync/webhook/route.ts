@@ -9,7 +9,7 @@ interface FlowWebhookPayload {
   contact?: UniversalContact;
   customerId: string;
   crmProvider?: CRMProvider;
-  operation: 'create' | 'update' | 'delete';
+  operation: 'created' | 'updated' | 'deleted';
   source: 'local' | 'external';
   flowRunId: string;
   connectionId: string;

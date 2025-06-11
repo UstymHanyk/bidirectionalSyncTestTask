@@ -32,10 +32,15 @@ export default function ContactsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTab, setSelectedTab] = useState<"contacts" | "sync">("contacts")
   const [auth, setAuth] = useState<AuthCustomer | null>(null)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     const authData = getStoredAuth()
     setAuth(authData)
+  }, [])
+
+  useEffect(() => {
+    setMounted(true)
   }, [])
 
   // Filter contacts based on search term
@@ -292,10 +297,30 @@ export default function ContactsPage() {
                 </Alert>
               )}
 
+              {/* Mobile Cards View */}
+              <div className="block lg:hidden space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Contacts</h3>
+                </div>
+                <Card className="group hover:shadow-lg transition-all duration-200 border-0 ring-1 ring-border/50 hover:ring-primary/20">
+                  <CardContent className="pt-4 sm:pt-6">
+                    <div className="flex items-center space-x-3 sm:space-x-4">
+                      <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/10 group-hover:scale-102 transition-transform duration-200">
+                        <Database className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Total Contacts</p>
+                        <p className="text-xl sm:text-2xl font-bold">{contacts.length}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
               {/* Contacts Table */}
               <ContactsTable 
                 contacts={filteredContacts}
-                isLoading={isLoading}
+                isLoading={isLoading || !mounted}
                 onEdit={handleEditContact}
                 onDelete={handleDeleteContact}
               />

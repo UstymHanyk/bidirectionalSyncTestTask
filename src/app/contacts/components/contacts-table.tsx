@@ -67,13 +67,15 @@ const formatDate = (dateString?: string) => {
   if (!dateString) return null
   try {
     const date = new Date(dateString)
-    // Use a consistent format that works the same on server and client
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: 'UTC' // Ensure consistent timezone
-    })
+    // Use ISO string parsing to avoid locale/timezone hydration issues
+    const year = date.getUTCFullYear()
+    const month = date.getUTCMonth()
+    const day = date.getUTCDate()
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    
+    return `${months[month]} ${day}, ${year}`
   } catch (error) {
     return 'Invalid date'
   }
@@ -246,10 +248,10 @@ export function ContactsTable({ contacts, isLoading, onEdit, onDelete }: Contact
                     )}
                   </div>
                   
-                  <div className="text-xs text-muted-foreground">
-                    {contact.updatedTime ? formatDate(contact.updatedTime) : 
-                     contact.createdTime ? formatDate(contact.createdTime) : 'Unknown'}
-                  </div>
+                                     <div className="text-xs text-muted-foreground" suppressHydrationWarning>
+                     {contact.updatedTime ? formatDate(contact.updatedTime) : 
+                      contact.createdTime ? formatDate(contact.createdTime) : 'Unknown'}
+                   </div>
                 </div>
               </div>
             </CardContent>
@@ -351,19 +353,19 @@ export function ContactsTable({ contacts, isLoading, onEdit, onDelete }: Contact
                     </TableCell>
                     
                     <TableCell>
-                      <div className="text-sm">
-                        {contact.updatedTime ? (
-                          <div className="text-muted-foreground">
-                            {formatDate(contact.updatedTime)}
-                          </div>
-                        ) : contact.createdTime ? (
-                          <div className="text-muted-foreground">
-                            Created {formatDate(contact.createdTime)}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">Unknown</span>
-                        )}
-                      </div>
+                                             <div className="text-sm" suppressHydrationWarning>
+                         {contact.updatedTime ? (
+                           <div className="text-muted-foreground">
+                             {formatDate(contact.updatedTime)}
+                           </div>
+                         ) : contact.createdTime ? (
+                           <div className="text-muted-foreground">
+                             Created {formatDate(contact.createdTime)}
+                           </div>
+                         ) : (
+                           <span className="text-muted-foreground">Unknown</span>
+                         )}
+                       </div>
                     </TableCell>
                     
                     <TableCell className="text-right">

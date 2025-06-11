@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      operation: 'create',
+      operation: 'created',
       contactId: newContact.id,
       externalContactId: payload.externalContactId,
       message: 'Contact created successfully'
